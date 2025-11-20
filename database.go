@@ -168,3 +168,44 @@ func CreateThreadAndOP(boardTag, subject, comment, imageURL string) error {
 	// 3. Commit the transaction
 	return tx.Commit()
 }
+func GetThreads(boardTag string) ([]Thread, error) {
+	// Query threads specifically for this board, ordered by newest first
+	// We select the OP data stored directly on the thread record
+	rows, err := DB.Query(`
+		SELECT id, subject, comment, image_url, created_at 
+		FROM threads 
+		WHERE board_tag = ? 
+		ORDER BY created_at DESC`, boardTag)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var threads []Thread
+	for rows.Next() {
+		var t Thread
+
+		// We scan the data into the Thread struct.
+		// Note: We map the comment/image directly to the OP struct inside the Thread.
+		var subject sql.NullString  // Handle potential NULL subject
+		var imageURL sql.NullString // Handle potential NULL image
+
+		err := rows.Scan(&t.ID, &subject, &t.OP.Comment, &imageURL, &t.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert sql.NullString to string
+		if subject.Valid {
+			t.Subject = subject.String
+		}
+		if imageURL.Valid {
+			t.OP.ImageURL = imageURL.String
+		}
+
+		t.BoardTag = boardTag
+		threads = append(threads, t)
+	}
+
+	return threads, nil
+}

@@ -99,12 +99,21 @@ func boardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Handle GET request to view the board (viewing logic from previous step)
+	// 3. Handle GET request to view the board
 	if r.Method == "GET" && len(parts) == 1 {
-		// We'll update this GET logic in the next step to fetch actual threads
+
+		// FETCH THREADS HERE
+		threads, err := GetThreads(boardTag)
+		if err != nil {
+			http.Error(w, "Database error fetching threads.", http.StatusInternalServerError)
+			log.Println("Error fetching threads:", err)
+			return
+		}
+
 		data := BoardPageData{
 			BoardTag:  boardTag,
 			BoardName: boardName,
-			Threads:   []Thread{}, // Still empty for now
+			Threads:   threads, // Pass the actual threads
 		}
 
 		tmpl, err := template.ParseFiles("templates/board.html")
