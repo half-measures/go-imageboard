@@ -118,3 +118,53 @@ func GetBoards() ([]Board, error) {
 
 	return boards, nil
 }
+
+func CreateThreadAndOP(boardTag, subject, comment, imageURL string) error {
+	// Start a transaction for atomicity
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // Rollback if transaction fails, otherwise committed below
+
+	// 1. Insert the new thread
+	threadStmt, err := tx.Prepare(`
+		INSERT INTO threads (board_tag, subject, comment, image_url) 
+		VALUES (?, ?, ?, ?);
+	`)
+	if err != nil {
+		return err
+	}
+	defer threadStmt.Close()
+
+	// The 'comment' and 'image_url' fields in the threads table are just a duplicate
+	// of the OP's post data for easy display on the board index.
+	result, err := threadStmt.Exec(boardTag, subject, comment, imageURL)
+	if err != nil {
+		return err
+	}
+
+	threadID, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	// 2. Insert the original post (OP)
+	postStmt, err := tx.Prepare(`
+		INSERT INTO posts (thread_id, comment, image_url) 
+		VALUES (?, ?, ?);
+	`)
+	if err != nil {
+		return err
+	}
+	defer postStmt.Close()
+
+	// The OP's thread_id is the ID we just received
+	_, err = postStmt.Exec(threadID, comment, imageURL)
+	if err != nil {
+		return err
+	}
+
+	// 3. Commit the transaction
+	return tx.Commit()
+}

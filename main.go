@@ -51,14 +51,15 @@ func main() {
 	InitDB()
 	defer DB.Close()
 
-	fs := http.FileServer(http.Dir("static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	// Serve static CSS files
+	fsStatic := http.FileServer(http.Dir("static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fsStatic))
 
-	// Register handlers:
+	// 💡 NEW: Serve uploaded images from the /uploads/ path
+	fsUploads := http.FileServer(http.Dir(UploadDir))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", fsUploads))
+
 	http.HandleFunc("/", homeHandler)
-
-	// 💡 New Handler Registration: Use the handler to catch all board requests.
-	// The path MUST end in a slash for this catch-all to work correctly!
 	http.HandleFunc("/{boardTag}/", boardHandler)
 
 	log.Println("Starting server on :8080...")
@@ -69,42 +70,41 @@ func main() {
 }
 
 func boardHandler(w http.ResponseWriter, r *http.Request) {
-	// r.URL.Path will be something like "/g/" or "/g/123"
-
-	// Split the path: ["", "g", ""] or ["", "g", "123"]
+	// Extract boardTag from path
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	// The board tag is the first element
 	boardTag := parts[0]
 
-	// 1. Basic Validation: Ensure the tag exists in our database
+	// 1. Validate board existence (reuse previous logic)
 	boardName := ""
-	boards, err := GetBoards() // Use the function from database.go
+	boards, err := GetBoards()
 	if err != nil {
 		http.Error(w, "Database error fetching boards.", http.StatusInternalServerError)
 		return
 	}
-
 	for _, board := range boards {
 		if board.Tag == boardTag {
 			boardName = board.Name
 			break
 		}
 	}
-
 	if boardName == "" {
 		http.NotFound(w, r)
 		return
 	}
 
-	// 2. Decide what kind of request this is (e.g., viewing a board vs. creating a thread)
+	// 2. Handle POST request for new thread creation
+	if r.Method == "POST" && len(parts) == 2 && parts[1] == "new" {
+		handleNewThread(w, r, boardTag)
+		return // Important: stop execution after handling POST
+	}
+
+	// 3. Handle GET request to view the board (viewing logic from previous step)
 	if r.Method == "GET" && len(parts) == 1 {
-		// A request to view the main board page (e.g., GET /g/)
-		// We'll fetch threads in the next step. For now, empty list.
+		// We'll update this GET logic in the next step to fetch actual threads
 		data := BoardPageData{
 			BoardTag:  boardTag,
 			BoardName: boardName,
-			Threads:   []Thread{}, // Currently empty
+			Threads:   []Thread{}, // Still empty for now
 		}
 
 		tmpl, err := template.ParseFiles("templates/board.html")
@@ -114,15 +114,61 @@ func boardHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tmpl.Execute(w, data)
-
-	} else if r.Method == "POST" && len(parts) == 2 && parts[1] == "new" {
-		// A request to create a new thread (e.g., POST /g/new)
-		// We will implement this handler in the next major step!
-		w.WriteHeader(http.StatusNotImplemented)
-		w.Write([]byte("Thread creation logic coming soon!"))
-
-	} else {
-		// Catch-all for other odd URLs or methods
-		http.NotFound(w, r)
+		return
 	}
+
+	// Fallthrough for thread view, etc. (Not implemented yet)
+	http.NotFound(w, r)
+}
+func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
+	// 1. Parse the multipart form data (necessary for file uploads)
+	// Max 10MB file upload size
+	err := r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		http.Error(w, "File too large or form parsing error.", http.StatusBadRequest)
+		log.Println("Form parse error:", err)
+		return
+	}
+
+	// Extract form fields
+	subject := r.FormValue("subject")
+	comment := r.FormValue("comment")
+
+	if comment == "" {
+		http.Error(w, "Comment is required.", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Handle Image Upload
+	file, header, err := r.FormFile("image")
+	imageURL := "" // Default to empty string if no image is uploaded
+
+	if err == nil { // Only process if an image was provided
+		defer file.Close()
+
+		// Use the SaveFile function from upload.go
+		imageURL, err = SaveFile(file, header)
+		if err != nil {
+			http.Error(w, "Failed to save image.", http.StatusInternalServerError)
+			log.Println("Image save error:", err)
+			return
+		}
+	} else if err != http.ErrMissingFile {
+		// Log other errors besides the expected "missing file" error
+		log.Println("Error retrieving file:", err)
+		http.Error(w, "Error processing file upload.", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Save the thread and post to the database
+	err = CreateThreadAndOP(boardTag, subject, comment, imageURL)
+	if err != nil {
+		http.Error(w, "Failed to create thread in database.", http.StatusInternalServerError)
+		log.Println("DB thread creation error:", err)
+		return
+	}
+
+	// 4. Success: Redirect the user back to the board page
+	// We use the HTTP 302 status code for redirection after a successful POST
+	http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
 }
