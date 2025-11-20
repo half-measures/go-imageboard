@@ -168,6 +168,58 @@ func CreateThreadAndOP(boardTag, subject, comment, imageURL string) error {
 	// 3. Commit the transaction
 	return tx.Commit()
 }
+func GetThread(threadID int) (Thread, error) {
+	var t Thread
+
+	// 1. Fetch the Thread details (Subject, Board)
+	err := DB.QueryRow("SELECT id, board_tag, subject FROM threads WHERE id = ?", threadID).Scan(&t.ID, &t.BoardTag, &t.Subject)
+	if err != nil {
+		return t, err
+	}
+
+	// 2. Fetch all posts associated with this thread (OP + Replies)
+	rows, err := DB.Query("SELECT id, comment, image_url, created_at FROM posts WHERE thread_id = ? ORDER BY id ASC", threadID)
+	if err != nil {
+		return t, err
+	}
+	defer rows.Close()
+
+	var allPosts []Post
+	for rows.Next() {
+		var p Post
+		var imageURL sql.NullString
+
+		if err := rows.Scan(&p.ID, &p.Comment, &imageURL, &p.CreatedAt); err != nil {
+			return t, err
+		}
+		if imageURL.Valid {
+			p.ImageURL = imageURL.String
+		}
+		allPosts = append(allPosts, p)
+	}
+
+	// 3. Assign OP and Replies
+	// Since we inserted the OP into the 'posts' table first, it is the first element.
+	if len(allPosts) > 0 {
+		t.OP = allPosts[0]
+		t.Replies = allPosts[1:] // All subsequent posts are replies
+	}
+
+	return t, nil
+}
+
+// CreateReply inserts a new post into an existing thread
+func CreateReply(threadID int, comment, imageURL string) error {
+	statement, err := DB.Prepare("INSERT INTO posts (thread_id, comment, image_url) VALUES (?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(threadID, comment, imageURL)
+	return err
+}
+
 func GetThreads(boardTag string) ([]Thread, error) {
 	// Query threads specifically for this board, ordered by newest first
 	// We select the OP data stored directly on the thread record

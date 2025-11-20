@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -125,59 +126,111 @@ func boardHandler(w http.ResponseWriter, r *http.Request) {
 		tmpl.Execute(w, data)
 		return
 	}
-
-	// Fallthrough for thread view, etc. (Not implemented yet)
-	http.NotFound(w, r)
-}
-func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
-	// 1. Parse the multipart form data (necessary for file uploads)
-	// Max 10MB file upload size
-	err := r.ParseMultipartForm(10 << 20)
-	if err != nil {
-		http.Error(w, "File too large or form parsing error.", http.StatusBadRequest)
-		log.Println("Form parse error:", err)
+	if len(parts) >= 3 && parts[1] == "res" {
+		threadIDStr := parts[2]
+		// We'll parse the ID inside the handler
+		handleThreadRoute(w, r, boardTag, threadIDStr)
 		return
 	}
 
-	// Extract form fields
+	// 2. New Thread: POST /g/new
+	if r.Method == "POST" && len(parts) == 2 && parts[1] == "new" {
+		handleNewThread(w, r, boardTag)
+		return
+	}
+
+	// 3. View Board: GET /g/
+	if r.Method == "GET" && len(parts) == 1 {
+		// ... (Existing code to fetch and show threads) ...
+		threads, _ := GetThreads(boardTag)
+		data := BoardPageData{BoardTag: boardTag, Threads: threads}
+		tmpl, _ := template.ParseFiles("templates/board.html")
+		tmpl.Execute(w, data)
+		return
+	}
+
+	http.NotFound(w, r)
+}
+
+func processUpload(r *http.Request) (string, error) {
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		if err == http.ErrMissingFile {
+			return "", nil // No image uploaded, which is fine
+		}
+		return "", err
+	}
+	defer file.Close()
+	return SaveFile(file, header)
+}
+
+func handleThreadRoute(w http.ResponseWriter, r *http.Request, boardTag, threadIDStr string) {
+	// Convert string ID to int
+	var threadID int
+	fmt.Sscanf(threadIDStr, "%d", &threadID)
+
+	if r.Method == "POST" {
+		// Handle Reply Submission
+		r.ParseMultipartForm(10 << 20)
+		comment := r.FormValue("comment")
+
+		// Use our new helper
+		imageURL, err := processUpload(r)
+		if err != nil {
+			http.Error(w, "Upload error", http.StatusInternalServerError)
+			return
+		}
+
+		err = CreateReply(threadID, comment, imageURL)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect back to the same thread
+		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+		return
+	}
+
+	// Handle GET: Show the thread
+	thread, err := GetThread(threadID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Reuse BoardPageData struct, but we only populate one Thread
+	data := BoardPageData{
+		BoardTag: boardTag,
+		// We wrap the single thread in a slice because the struct expects a slice,
+		// or we could make a new struct. Reusing is "quick and easy".
+		Threads: []Thread{thread},
+	}
+
+	tmpl, err := template.ParseFiles("templates/thread.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, data)
+}
+
+// Update handleNewThread to use the processUpload helper too
+func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
+	r.ParseMultipartForm(10 << 20)
 	subject := r.FormValue("subject")
 	comment := r.FormValue("comment")
 
-	if comment == "" {
-		http.Error(w, "Comment is required.", http.StatusBadRequest)
+	imageURL, err := processUpload(r)
+	if err != nil {
+		http.Error(w, "Upload error", http.StatusInternalServerError)
 		return
 	}
 
-	// 2. Handle Image Upload
-	file, header, err := r.FormFile("image")
-	imageURL := "" // Default to empty string if no image is uploaded
-
-	if err == nil { // Only process if an image was provided
-		defer file.Close()
-
-		// Use the SaveFile function from upload.go
-		imageURL, err = SaveFile(file, header)
-		if err != nil {
-			http.Error(w, "Failed to save image.", http.StatusInternalServerError)
-			log.Println("Image save error:", err)
-			return
-		}
-	} else if err != http.ErrMissingFile {
-		// Log other errors besides the expected "missing file" error
-		log.Println("Error retrieving file:", err)
-		http.Error(w, "Error processing file upload.", http.StatusInternalServerError)
-		return
-	}
-
-	// 3. Save the thread and post to the database
 	err = CreateThreadAndOP(boardTag, subject, comment, imageURL)
 	if err != nil {
-		http.Error(w, "Failed to create thread in database.", http.StatusInternalServerError)
-		log.Println("DB thread creation error:", err)
+		http.Error(w, "DB error", http.StatusInternalServerError)
 		return
 	}
-
-	// 4. Success: Redirect the user back to the board page
-	// We use the HTTP 302 status code for redirection after a successful POST
 	http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
 }
