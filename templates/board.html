@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>/{{.BoardTag}}/ - {{.BoardName}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <header>
+        <h1>/{{.BoardTag}}/ - {{.BoardName}}</h1>
+        <p>Return to <a href="/">[Home]</a></p>
+    </header>
+
+    <main>
+        
+        <div class="new-thread-form">
+            <h2>Start a New Thread</h2>
+            <form action="/{{.BoardTag}}/new" method="POST" enctype="multipart/form-data">
+                <input type="text" name="subject" placeholder="Subject (Optional)">
+                <textarea name="comment" placeholder="Comment (Required)" required></textarea>
+                <input type="file" name="image" accept="image/*">
+                <button type="submit">Post</button>
+            </form>
+        </div>
+        
+        <hr>
+
+        <div class="thread-list">
+            <h2>Threads</h2>
+            
+            {{if .Threads}}
+                <div class="thread-container">
+                    <p>Thread listing goes here...</p>
+                </div>
+            {{else}}
+                <p>No threads posted yet. Be the first!</p>
+            {{end}}
+        </div>
+    </main>
+</body>
+</html>
