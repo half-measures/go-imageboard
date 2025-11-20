@@ -2,10 +2,12 @@
 package main
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -59,7 +61,7 @@ func main() {
 	// 💡 NEW: Serve uploaded images from the /uploads/ path
 	fsUploads := http.FileServer(http.Dir(UploadDir))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fsUploads))
-
+	http.HandleFunc("/admin/delete/", BasicAuth(deleteHandler, "admin", "secret123"))
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/{boardTag}/", boardHandler)
 
@@ -233,4 +235,79 @@ func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
 		return
 	}
 	http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
+}
+
+// BasicAuth wraps a handler and requires a username/password
+func BasicAuth(handler http.HandlerFunc, username, password string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get credentials from the request header
+		user, pass, ok := r.BasicAuth()
+
+		// Verify credentials using ConstantTimeCompare to be secure
+		if !ok || subtle.ConstantTimeCompare([]byte(user), []byte(username)) != 1 || subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// If pass, call the actual handler
+		handler(w, r)
+	}
+}
+
+// --- DELETE HANDLER ---
+
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	// Expected URL: /admin/delete/thread/123 or /admin/delete/post/456
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	if len(parts) < 4 {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	actionType := parts[2] // "thread" or "post"
+	idStr := parts[3]
+	var id int
+	fmt.Sscanf(idStr, "%d", &id)
+
+	var imagesToDelete []string
+	var err error
+
+	// Perform Database Deletion
+	if actionType == "thread" {
+		imagesToDelete, err = DeleteThread(id)
+	} else if actionType == "post" {
+		var img string
+		img, err = DeletePost(id)
+		if img != "" {
+			imagesToDelete = append(imagesToDelete, img)
+		}
+	} else {
+		http.Error(w, "Unknown type", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Perform File Deletion
+	// Our images are stored as "/uploads/filename.jpg", but os.Remove needs "./uploads/filename.jpg"
+	for _, imgPath := range imagesToDelete {
+		// Strip the leading slash to make it relative to our project root
+		// e.g. "/uploads/abc.jpg" -> "uploads/abc.jpg"
+		relativePath := strings.TrimPrefix(imgPath, "/")
+		err := os.Remove(relativePath)
+		if err != nil {
+			log.Println("Failed to delete file:", relativePath, err)
+			// We don't stop the request here; the DB record is already gone.
+		} else {
+			log.Println("Deleted file:", relativePath)
+		}
+	}
+
+	// Redirect back to home or the board (simple redirect to home for now)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

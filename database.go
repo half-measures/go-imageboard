@@ -261,3 +261,75 @@ func GetThreads(boardTag string) ([]Thread, error) {
 
 	return threads, nil
 }
+
+// database.go
+
+// DeleteThread deletes a thread, its replies, and returns all associated image paths
+func DeleteThread(threadID int) ([]string, error) {
+	// 1. Collect all image URLs associated with this thread (OP + Replies)
+	// We need these to delete the actual files from the disk later
+	rows, err := DB.Query(`
+		SELECT image_url FROM threads WHERE id = ?
+		UNION
+		SELECT image_url FROM posts WHERE thread_id = ?
+	`, threadID, threadID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var images []string
+	for rows.Next() {
+		var img sql.NullString
+		if err := rows.Scan(&img); err != nil {
+			continue
+		}
+		if img.Valid && img.String != "" {
+			images = append(images, img.String)
+		}
+	}
+
+	// 2. Delete the records from the database
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	// Delete replies first (foreign key constraint usually handles this, but let's be explicit)
+	_, err = tx.Exec("DELETE FROM posts WHERE thread_id = ?", threadID)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// Delete the thread/OP
+	_, err = tx.Exec("DELETE FROM threads WHERE id = ?", threadID)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	err = tx.Commit()
+	return images, err
+}
+
+// DeletePost deletes a single reply and returns its image path (if any)
+func DeletePost(postID int) (string, error) {
+	// 1. Get the image URL
+	var img sql.NullString
+	err := DB.QueryRow("SELECT image_url FROM posts WHERE id = ?", postID).Scan(&img)
+	if err != nil {
+		return "", err
+	}
+
+	// 2. Delete the record
+	_, err = DB.Exec("DELETE FROM posts WHERE id = ?", postID)
+	if err != nil {
+		return "", err
+	}
+
+	if img.Valid {
+		return img.String, nil
+	}
+	return "", nil
+}
