@@ -1,0 +1,1 @@
+This is a GO first app that re-creates image boards. It allows anonymous users to make comments, make threads, and upload images to respective boards. 
