@@ -119,54 +119,106 @@ func GetBoards() ([]Board, error) {
 	return boards, nil
 }
 
-func CreateThreadAndOP(boardTag, subject, comment, imageURL string) error {
+// CreateThreadAndOP creates a new thread, ensuring the board does not exceed its thread limit.
+// It returns a list of image file paths that were deleted if a thread was pruned.
+func CreateThreadAndOP(boardTag, subject, comment, imageURL string) ([]string, error) {
+	const threadLimit = 20
+	var imagesToDelete []string
+
 	// Start a transaction for atomicity
 	tx, err := DB.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback() // Rollback if transaction fails, otherwise committed below
 
-	// 1. Insert the new thread
+	// 1. Count current threads on the board
+	var threadCount int
+	err = tx.QueryRow("SELECT COUNT(*) FROM threads WHERE board_tag = ?", boardTag).Scan(&threadCount)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. If limit is reached, delete the oldest thread
+	if threadCount >= threadLimit {
+		// Find the oldest thread
+		var oldestThreadID int
+		err = tx.QueryRow("SELECT id FROM threads WHERE board_tag = ? ORDER BY created_at ASC LIMIT 1", boardTag).Scan(&oldestThreadID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect image URLs from the thread and its posts before deleting
+		rows, err := tx.Query(`
+			SELECT image_url FROM threads WHERE id = ?
+			UNION ALL
+			SELECT image_url FROM posts WHERE thread_id = ?
+		`, oldestThreadID, oldestThreadID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var img sql.NullString
+			if err := rows.Scan(&img); err != nil {
+				continue // Or handle error
+			}
+			if img.Valid && img.String != "" {
+				imagesToDelete = append(imagesToDelete, img.String)
+			}
+		}
+
+		// Delete replies
+		_, err = tx.Exec("DELETE FROM posts WHERE thread_id = ?", oldestThreadID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Delete the thread itself
+		_, err = tx.Exec("DELETE FROM threads WHERE id = ?", oldestThreadID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 3. Insert the new thread
 	threadStmt, err := tx.Prepare(`
 		INSERT INTO threads (board_tag, subject, comment, image_url) 
 		VALUES (?, ?, ?, ?);
 	`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer threadStmt.Close()
 
-	// The 'comment' and 'image_url' fields in the threads table are just a duplicate
-	// of the OP's post data for easy display on the board index.
 	result, err := threadStmt.Exec(boardTag, subject, comment, imageURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	threadID, err := result.LastInsertId()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 2. Insert the original post (OP)
+	// 4. Insert the original post (OP)
 	postStmt, err := tx.Prepare(`
 		INSERT INTO posts (thread_id, comment, image_url) 
 		VALUES (?, ?, ?);
 	`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer postStmt.Close()
 
-	// The OP's thread_id is the ID we just received
 	_, err = postStmt.Exec(threadID, comment, imageURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 3. Commit the transaction
-	return tx.Commit()
+	// 5. Commit the transaction
+	return imagesToDelete, tx.Commit()
 }
 func GetThread(threadID int) (Thread, error) {
 	var t Thread
@@ -224,10 +276,10 @@ func GetThreads(boardTag string) ([]Thread, error) {
 	// Query threads specifically for this board, ordered by newest first
 	// We select the OP data stored directly on the thread record
 	rows, err := DB.Query(`
-		SELECT id, subject, comment, image_url, created_at 
-		FROM threads 
-		WHERE board_tag = ? 
-		ORDER BY created_at DESC`, boardTag)
+		SELECT id, subject, comment, image_url, created_at
+		FROM threads
+		WHERE board_tag = ?
+		ORDER BY id DESC`, boardTag)
 	if err != nil {
 		return nil, err
 	}
