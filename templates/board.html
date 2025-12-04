@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>/{{.BoardTag}}/ - {{.BoardName}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <header>
+        <h1>/{{.BoardTag}}/ - {{.BoardName}}</h1>
+        <p>Return to <a href="/">[Home]</a></p>
+    </header>
+
+    <main>
+        
+        <div class="new-thread-form">
+            <h2>Start a New Thread</h2>
+            <form action="/{{.BoardTag}}/new" method="POST" enctype="multipart/form-data">
+                <input type="text" name="subject" placeholder="Subject (Optional)">
+                <textarea name="comment" placeholder="Comment (Required)" required></textarea>
+                <input type="file" name="image" accept="image/*">
+                <button type="submit">Post</button>
+            </form>
+        </div>
+        
+        <hr>
+
+<div class="thread-list">
+            
+            {{range .Threads}}
+                <div class="thread">
+                    <div class="post-header">
+                        {{if .OP.ImageURL}}
+                            <span class="file-info">File: <a href="{{.OP.ImageURL}}" target="_blank">View</a></span>
+                        {{end}}
+                        
+                        <span class="subject">{{.Subject}}</span>
+                        <span class="name">Anonymous</span>
+                        <span class="date">{{.CreatedAt.Format "01/02/06(Mon)15:04:05"}}</span>
+                        <span class="id">No. {{.ID}}</span>
+                        [<a href="/{{$.BoardTag}}/res/{{.ID}}">Reply</a>]
+                    </div>
+
+                    <div class="post-content">
+                        {{if .OP.ImageURL}}
+                            <a href="{{.OP.ImageURL}}" target="_blank">
+                                <img src="{{.OP.ImageURL}}" style="float: left; max-width: 200px; max-height: 200px; margin-right: 15px; margin-bottom: 10px;" alt="User Image">
+                            </a>
+                        {{end}}
+
+                        <blockquote class="post-message">
+                            {{.OP.Comment}}
+                        </blockquote>
+                    </div>
+                    <div style="clear: both;"></div>
+                </div>
+                <hr>
+            {{else}}
+                <p>No threads posted yet. Be the first!</p>
+            {{end}}
+
+        </div>
+    </main>
+</body>
+</html>
