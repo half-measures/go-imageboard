@@ -229,11 +229,27 @@ func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
 		return
 	}
 
-	err = CreateThreadAndOP(boardTag, subject, comment, imageURL)
+	// CreateThreadAndOP now returns a list of images that were deleted
+	imagesToDelete, err := CreateThreadAndOP(boardTag, subject, comment, imageURL)
 	if err != nil {
-		http.Error(w, "DB error", http.StatusInternalServerError)
+		http.Error(w, "DB error: "+err.Error(), http.StatusInternalServerError)
+		log.Println("Error creating thread:", err)
 		return
 	}
+
+	// If any images were returned (from a pruned thread), delete them.
+	if len(imagesToDelete) > 0 {
+		for _, imgPath := range imagesToDelete {
+			relativePath := strings.TrimPrefix(imgPath, "/")
+			err := os.Remove(relativePath)
+			if err != nil {
+				log.Printf("Failed to delete pruned image %s: %v\n", relativePath, err)
+			} else {
+				log.Printf("Deleted pruned image: %s\n", relativePath)
+			}
+		}
+	}
+
 	http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
 }
 
