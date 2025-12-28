@@ -24,7 +24,7 @@
             <form action="/{{.BoardTag}}/new" method="POST" enctype="multipart/form-data">
                 <input type="text" name="subject" placeholder="Subject (Optional)">
                 <textarea name="comment" placeholder="Comment (Required)" required></textarea>
-                <input type="file" name="image" accept="image/*">
+                <input type="file" name="image" accept="image/*,video/mp4,video/webm">
                 <button type="submit">Post</button>
             </form>
         </div>
@@ -50,9 +50,14 @@
                 <div class="post-content">
                     {{if .OP.ImageURL}}
                     <a href="{{.OP.ImageURL}}" target="_blank">
+                        {{if isVideo .OP.ImageURL}}
+                        <video src="{{.OP.ImageURL}}" controls
+                            style="float: left; max-width: 200px; max-height: 200px; margin-right: 15px; margin-bottom: 10px;"></video>
+                        {{else}}
                         <img src="{{.OP.ImageURL}}"
                             style="float: left; max-width: 200px; max-height: 200px; margin-right: 15px; margin-bottom: 10px;"
-                            alt="User Image">
+                            alt="User Media">
+                        {{end}}
                     </a>
                     {{end}}
 

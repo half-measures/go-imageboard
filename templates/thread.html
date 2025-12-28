@@ -21,7 +21,7 @@
             <h2>Post a Reply</h2>
             <form action="" method="POST" enctype="multipart/form-data">
                 <textarea name="comment" placeholder="Comment" required></textarea>
-                <input type="file" name="image" accept="image/*">
+                <input type="file" name="image" accept="image/*,video/mp4,video/webm">
                 <button type="submit">Reply</button>
             </form>
         </div>
@@ -40,7 +40,12 @@
                 <div class="post-content">
                     {{if .OP.ImageURL}}
                     <a href="{{.OP.ImageURL}}" target="_blank">
+                        {{if isVideo .OP.ImageURL}}
+                        <video src="{{.OP.ImageURL}}" controls
+                            style="float: left; max-width: 250px; margin-right: 15px;"></video>
+                        {{else}}
                         <img src="{{.OP.ImageURL}}" style="float: left; max-width: 250px; margin-right: 15px;">
+                        {{end}}
                     </a>
                     {{end}}
                     <blockquote class="post-message">{{.OP.Comment | formatComment}}</blockquote>
@@ -64,7 +69,12 @@
                     <div class="post-content">
                         {{if .ImageURL}}
                         <a href="{{.ImageURL}}" target="_blank">
+                            {{if isVideo .ImageURL}}
+                            <video src="{{.ImageURL}}" controls
+                                style="float: left; max-width: 125px; margin-right: 10px;"></video>
+                            {{else}}
                             <img src="{{.ImageURL}}" style="float: left; max-width: 125px; margin-right: 10px;">
+                            {{end}}
                         </a>
                         {{end}}
                         <blockquote class="post-message" style="margin: 10px 0;">{{.Comment | formatComment}}
@@ -112,10 +122,18 @@
                             let imageHtml = '';
                             let fileInfo = '';
                             if (post.image_url) {
-                                imageHtml = `
-                                    <a href="${post.image_url}" target="_blank">
-                                        <img src="${post.image_url}" style="float: left; max-width: 125px; margin-right: 10px;">
-                                    </a>`;
+                                const isVideo = post.image_url.endsWith('.mp4') || post.image_url.endsWith('.webm');
+                                if (isVideo) {
+                                    imageHtml = `
+                                        <a href="${post.image_url}" target="_blank">
+                                            <video src="${post.image_url}" controls style="float: left; max-width: 125px; margin-right: 10px;"></video>
+                                        </a>`;
+                                } else {
+                                    imageHtml = `
+                                        <a href="${post.image_url}" target="_blank">
+                                            <img src="${post.image_url}" style="float: left; max-width: 125px; margin-right: 10px;">
+                                        </a>`;
+                                }
                                 fileInfo = `<span class="file-info"><br>File: <a href="${post.image_url}" target="_blank">View</a></span>`;
                             }
 

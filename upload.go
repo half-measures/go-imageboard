@@ -53,6 +53,16 @@ func SaveFile(file multipart.File, header *multipart.FileHeader) (string, error)
 	return "/uploads/" + uniqueFilename, nil
 }
 
+// IsAllowedExtension checks if the file extension is supported.
+func IsAllowedExtension(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".mp4", ".webm":
+		return true
+	}
+	return false
+}
+
 // DeleteFiles removes the specified files from the disk.
 // Paths are expected to be public URL paths like "/uploads/filename.jpg".
 func DeleteFiles(filePaths []string) {

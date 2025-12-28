@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -44,8 +45,15 @@ func formatComment(comment string) template.HTML {
 	return template.HTML(escaped)
 }
 
+// isVideo checks if a filename or URL has a video extension
+func isVideo(url string) bool {
+	ext := strings.ToLower(filepath.Ext(url))
+	return ext == ".mp4" || ext == ".webm"
+}
+
 var funcMap = template.FuncMap{
 	"formatComment": formatComment,
+	"isVideo":       isVideo,
 }
 
 // 2. Define our handler for the homepage
@@ -178,6 +186,11 @@ func processUpload(r *http.Request) (string, error) {
 		return "", err
 	}
 	defer file.Close()
+
+	if !IsAllowedExtension(header.Filename) {
+		return "", fmt.Errorf("file type not allowed")
+	}
+
 	return SaveFile(file, header)
 }
 

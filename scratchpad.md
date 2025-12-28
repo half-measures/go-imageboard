@@ -1,7 +1,6 @@
 TODO:
 
 
-UPDATE thing at th bottom of the page
 
 Post formatting for like green text and replies
 
