@@ -164,22 +164,6 @@ func boardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. New Thread: POST /g/new
-	if r.Method == "POST" && len(parts) == 2 && parts[1] == "new" {
-		handleNewThread(w, r, boardTag)
-		return
-	}
-
-	// 3. View Board: GET /g/
-	if r.Method == "GET" && len(parts) == 1 {
-		// ... (Existing code to fetch and show threads) ...
-		threads, _ := GetThreads(boardTag)
-		data := BoardPageData{BoardTag: boardTag, Threads: threads}
-		tmpl, _ := template.ParseFiles("templates/board.html")
-		tmpl.Execute(w, data)
-		return
-	}
-
 	http.NotFound(w, r)
 }
 
