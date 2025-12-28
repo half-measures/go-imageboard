@@ -1,28 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-R-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
 
     <header>
         <h1>{{.Title}}</h1>
-        <p>A 4chan-like imageboard written in Go.</p>
+        <p>Posters take full responsibility for their actions.</p>
     </header>
 
     <main>
         <h2>Boards</h2>
         <nav class="board-list">
             {{range .Boards}}
-                <a class="board-link" href="/{{.Tag}}/">
-                    /{{.Tag}}/ - {{.Name}}
-                </a>
+            <a class="board-link" href="/{{.Tag}}/">
+                /{{.Tag}}/ - {{.Name}}
+            </a>
             {{end}}
         </nav>
     </main>
 
 </body>
+
 </html>
