@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -183,9 +182,16 @@ func handleThreadRoute(w http.ResponseWriter, r *http.Request, boardTag, threadI
 			return
 		}
 
-		err = CreateReply(threadID, comment, imageURL)
+		imagesToDelete, pruned, err := CreateReply(threadID, comment, imageURL)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+
+		if pruned {
+			DeleteFiles(imagesToDelete)
+			// Redirect back to the board index since the thread is gone
+			http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
 			return
 		}
 
@@ -239,15 +245,7 @@ func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
 
 	// If any images were returned (from a pruned thread), delete them.
 	if len(imagesToDelete) > 0 {
-		for _, imgPath := range imagesToDelete {
-			relativePath := strings.TrimPrefix(imgPath, "/")
-			err := os.Remove(relativePath)
-			if err != nil {
-				log.Printf("Failed to delete pruned image %s: %v\n", relativePath, err)
-			} else {
-				log.Printf("Deleted pruned image: %s\n", relativePath)
-			}
-		}
+		DeleteFiles(imagesToDelete)
 	}
 
 	http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
@@ -310,19 +308,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Perform File Deletion
-	// Our images are stored as "/uploads/filename.jpg", but os.Remove needs "./uploads/filename.jpg"
-	for _, imgPath := range imagesToDelete {
-		// Strip the leading slash to make it relative to our project root
-		// e.g. "/uploads/abc.jpg" -> "uploads/abc.jpg"
-		relativePath := strings.TrimPrefix(imgPath, "/")
-		err := os.Remove(relativePath)
-		if err != nil {
-			log.Println("Failed to delete file:", relativePath, err)
-			// We don't stop the request here; the DB record is already gone.
-		} else {
-			log.Println("Deleted file:", relativePath)
-		}
-	}
+	DeleteFiles(imagesToDelete)
 
 	// Redirect back to home or the board (simple redirect to home for now)
 	http.Redirect(w, r, "/", http.StatusSeeOther)

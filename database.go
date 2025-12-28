@@ -260,16 +260,79 @@ func GetThread(threadID int) (Thread, error) {
 	return t, nil
 }
 
-// CreateReply inserts a new post into an existing thread
-func CreateReply(threadID int, comment, imageURL string) error {
-	statement, err := DB.Prepare("INSERT INTO posts (thread_id, comment, image_url) VALUES (?, ?, ?)")
+// CreateReply inserts a new post into an existing thread.
+// If the post count reaches 500, it deletes the thread and returns its images.
+func CreateReply(threadID int, comment, imageURL string) ([]string, bool, error) {
+	const postLimit = 500
+
+	// Start a transaction
+	tx, err := DB.Begin()
 	if err != nil {
-		return err
+		return nil, false, err
+	}
+	defer tx.Rollback()
+
+	// 1. Get current post count
+	var count int
+	err = tx.QueryRow("SELECT COUNT(*) FROM posts WHERE thread_id = ?", threadID).Scan(&count)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// 2. If the new post would reach the limit, prune the thread
+	if count+1 >= postLimit {
+		// Collect images before deleting
+		var images []string
+		rows, err := tx.Query(`
+			SELECT image_url FROM threads WHERE id = ?
+			UNION ALL
+			SELECT image_url FROM posts WHERE thread_id = ?
+		`, threadID, threadID)
+		if err != nil {
+			return nil, false, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var img sql.NullString
+			if err := rows.Scan(&img); err != nil {
+				continue
+			}
+			if img.Valid && img.String != "" {
+				images = append(images, img.String)
+			}
+		}
+
+		// Delete posts
+		_, err = tx.Exec("DELETE FROM posts WHERE thread_id = ?", threadID)
+		if err != nil {
+			return nil, false, err
+		}
+
+		// Delete thread
+		_, err = tx.Exec("DELETE FROM threads WHERE id = ?", threadID)
+		if err != nil {
+			return nil, false, err
+		}
+
+		err = tx.Commit()
+		return images, true, err
+	}
+
+	// 3. Otherwise, just insert the new post
+	statement, err := tx.Prepare("INSERT INTO posts (thread_id, comment, image_url) VALUES (?, ?, ?)")
+	if err != nil {
+		return nil, false, err
 	}
 	defer statement.Close()
 
 	_, err = statement.Exec(threadID, comment, imageURL)
-	return err
+	if err != nil {
+		return nil, false, err
+	}
+
+	err = tx.Commit()
+	return nil, false, err
 }
 
 func GetThreads(boardTag string) ([]Thread, error) {

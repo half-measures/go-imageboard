@@ -4,9 +4,11 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -49,4 +51,20 @@ func SaveFile(file multipart.File, header *multipart.FileHeader) (string, error)
 
 	// 5. Return the URL path, which will be served via the static handler
 	return "/uploads/" + uniqueFilename, nil
+}
+
+// DeleteFiles removes the specified files from the disk.
+// Paths are expected to be public URL paths like "/uploads/filename.jpg".
+func DeleteFiles(filePaths []string) {
+	for _, imgPath := range filePaths {
+		// Strip the leading slash to make it relative to our project root
+		// e.g. "/uploads/abc.jpg" -> "uploads/abc.jpg"
+		relativePath := strings.TrimPrefix(imgPath, "/")
+		err := os.Remove(relativePath)
+		if err != nil {
+			log.Printf("Failed to delete file %s: %v\n", relativePath, err)
+		} else {
+			log.Printf("Deleted file: %s\n", relativePath)
+		}
+	}
 }
