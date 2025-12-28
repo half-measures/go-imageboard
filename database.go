@@ -122,7 +122,7 @@ func GetBoards() ([]Board, error) {
 // CreateThreadAndOP creates a new thread, ensuring the board does not exceed its thread limit.
 // It returns a list of image file paths that were deleted if a thread was pruned.
 func CreateThreadAndOP(boardTag, subject, comment, imageURL string) ([]string, error) {
-	const threadLimit = 3
+	const threadLimit = 20
 	var imagesToDelete []string
 
 	// Start a transaction for atomicity
@@ -263,7 +263,7 @@ func GetThread(threadID int) (Thread, error) {
 // CreateReply inserts a new post into an existing thread.
 // If the post count reaches 500, it deletes the thread and returns its images.
 func CreateReply(threadID int, comment, imageURL string) ([]string, bool, error) {
-	const postLimit = 500
+	const postLimit = 500 //Limit where thread is pruned
 
 	// Start a transaction
 	tx, err := DB.Begin()
