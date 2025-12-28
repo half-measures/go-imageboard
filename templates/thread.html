@@ -75,9 +75,77 @@
                 {{end}}
             </div>
 
+            <div class="thread-controls" style="margin: 20px 0; text-align: center;">
+                <button id="update-btn" style="padding: 8px 16px; border-radius: 4px; font-weight: bold;">[Update
+                    Thread]</button>
+                <div id="update-status" style="margin-top: 5px; font-size: 0.85em; opacity: 0.8;"></div>
+            </div>
+
         </div>
         {{end}}
     </main>
+
+    <script>
+        document.getElementById('update-btn').onclick = function () {
+            const threadID = "{{ (index .Threads 0).ID }}";
+            const replies = document.querySelectorAll('.post.reply');
+            let lastID = "{{ (index .Threads 0).OP.ID }}";
+
+            if (replies.length > 0) {
+                // Get the ID from the last reply's ID attribute (p123 -> 123)
+                lastID = replies[replies.length - 1].id.replace('p', '');
+            }
+
+            const status = document.getElementById('update-status');
+            status.textContent = "Checking for new posts...";
+
+            fetch(`/api/thread/${threadID}/updates?after=${lastID}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const container = document.querySelector('.replies');
+                        data.forEach(post => {
+                            const postDiv = document.createElement('div');
+                            postDiv.className = 'post reply';
+                            postDiv.id = `p${post.id}`;
+
+                            let imageHtml = '';
+                            let fileInfo = '';
+                            if (post.image_url) {
+                                imageHtml = `
+                                    <a href="${post.image_url}" target="_blank">
+                                        <img src="${post.image_url}" style="float: left; max-width: 125px; margin-right: 10px;">
+                                    </a>`;
+                                fileInfo = `<span class="file-info"><br>File: <a href="${post.image_url}" target="_blank">View</a></span>`;
+                            }
+
+                            postDiv.innerHTML = `
+                                <div class="post-header">
+                                    <span class="name">Anonymous</span>
+                                    <span class="date">${post.created_at}</span>
+                                    <span class="id">No. ${post.id}</span>
+                                    ${fileInfo}
+                                </div>
+                                <div class="post-content">
+                                    ${imageHtml}
+                                    <blockquote class="post-message" style="margin: 10px 0;">${post.comment}</blockquote>
+                                </div>
+                                <div style="clear: both;"></div>
+                            `;
+                            container.appendChild(postDiv);
+                        });
+                        status.textContent = `Success: ${data.length} new post(s) added.`;
+                    } else {
+                        status.textContent = "No new posts found.";
+                    }
+                    setTimeout(() => { if (status.textContent !== "") status.textContent = ""; }, 4000);
+                })
+                .catch(err => {
+                    console.error('Update failed:', err);
+                    status.textContent = "Error: Could not update thread.";
+                });
+        };
+    </script>
 </body>
 
 </html>

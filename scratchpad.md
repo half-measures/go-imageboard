@@ -1,5 +1,5 @@
 TODO:
-UI - Theme switcher - dark mode
+
 
 UPDATE thing at th bottom of the page
 

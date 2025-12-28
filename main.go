@@ -3,6 +3,7 @@ package main
 
 import (
 	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"html"
 	"html/template"
@@ -90,6 +91,7 @@ func main() {
 	// 💡 NEW: Serve uploaded images from the /uploads/ path
 	fsUploads := http.FileServer(http.Dir(UploadDir))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fsUploads))
+	http.HandleFunc("/api/thread/{id}/updates", replyUpdateHandler)
 	http.HandleFunc("/admin/delete/", BasicAuth(deleteHandler, "admin", "secret123"))
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/{boardTag}/", boardHandler)
@@ -263,6 +265,46 @@ func handleNewThread(w http.ResponseWriter, r *http.Request, boardTag string) {
 	}
 
 	http.Redirect(w, r, "/"+boardTag+"/", http.StatusSeeOther)
+}
+
+// --- API HANDLERS ---
+
+func replyUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	// We use the {id} value from the path
+	threadIDStr := r.PathValue("id")
+	var threadID int
+	fmt.Sscanf(threadIDStr, "%d", &threadID)
+
+	afterStr := r.URL.Query().Get("after")
+	var afterID int
+	fmt.Sscanf(afterStr, "%d", &afterID)
+
+	posts, err := GetNewReplies(threadID, afterID)
+	if err != nil {
+		log.Println("Error fetching updates:", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	type ResponsePost struct {
+		ID        int    `json:"id"`
+		Comment   string `json:"comment"`
+		ImageURL  string `json:"image_url"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	var resp []ResponsePost
+	for _, p := range posts {
+		resp = append(resp, ResponsePost{
+			ID:        p.ID,
+			Comment:   string(formatComment(p.Comment)),
+			ImageURL:  p.ImageURL,
+			CreatedAt: p.CreatedAt.Format("01/02/06(Mon)15:04:05"),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // BasicAuth wraps a handler and requires a username/password

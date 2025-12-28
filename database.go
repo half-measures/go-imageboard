@@ -260,6 +260,29 @@ func GetThread(threadID int) (Thread, error) {
 	return t, nil
 }
 
+// GetNewReplies returns posts for a thread that have an ID greater than lastID
+func GetNewReplies(threadID int, lastID int) ([]Post, error) {
+	rows, err := DB.Query("SELECT id, comment, image_url, created_at FROM posts WHERE thread_id = ? AND id > ? ORDER BY id ASC", threadID, lastID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var newPosts []Post
+	for rows.Next() {
+		var p Post
+		var imageURL sql.NullString
+		if err := rows.Scan(&p.ID, &p.Comment, &imageURL, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		if imageURL.Valid {
+			p.ImageURL = imageURL.String
+		}
+		newPosts = append(newPosts, p)
+	}
+	return newPosts, nil
+}
+
 // CreateReply inserts a new post into an existing thread.
 // If the post count reaches 500, it deletes the thread and returns its images.
 func CreateReply(threadID int, comment, imageURL string) ([]string, bool, error) {
