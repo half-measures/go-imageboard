@@ -122,7 +122,7 @@ func GetBoards() ([]Board, error) {
 // CreateThreadAndOP creates a new thread, ensuring the board does not exceed its thread limit.
 // It returns a list of image file paths that were deleted if a thread was pruned.
 func CreateThreadAndOP(boardTag, subject, comment, imageURL string) ([]string, error) {
-	const threadLimit = 20
+	const threadLimit = 3
 	var imagesToDelete []string
 
 	// Start a transaction for atomicity
