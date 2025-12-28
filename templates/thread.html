@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>/{{.BoardTag}}/ - Thread #{{(index .Threads 0).ID}}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
 
     <header>
@@ -24,45 +26,47 @@
         <hr>
 
         {{range .Threads}} <div class="thread">
-            
-            <div class="post op">
+
+            <div class="post op" id="p{{.OP.ID}}">
                 <div class="post-header">
-                    <span class="subject">{{.Subject}}</span> 
+                    <span class="subject">{{.Subject}}</span>
                     <span class="name">Anonymous</span>
                     <span class="date">{{.OP.CreatedAt.Format "01/02/06(Mon)15:04:05"}}</span>
                     <span class="id">No. {{.OP.ID}}</span>
                 </div>
-                
+
                 <div class="post-content">
                     {{if .OP.ImageURL}}
-                        <a href="{{.OP.ImageURL}}" target="_blank">
-                            <img src="{{.OP.ImageURL}}" style="float: left; max-width: 250px; margin-right: 15px;">
-                        </a>
+                    <a href="{{.OP.ImageURL}}" target="_blank">
+                        <img src="{{.OP.ImageURL}}" style="float: left; max-width: 250px; margin-right: 15px;">
+                    </a>
                     {{end}}
-                    <blockquote class="post-message">{{.OP.Comment}}</blockquote>
+                    <blockquote class="post-message">{{.OP.Comment | formatComment}}</blockquote>
                 </div>
                 <div style="clear: both;"></div>
             </div>
 
             <div class="replies">
                 {{range .Replies}}
-                <div class="post reply" style="background: #d6daf0; margin: 10px 0 10px 20px; padding: 10px; border: 1px solid #b7c5d9;">
+                <div class="post reply" id="p{{.ID}}"
+                    style="background: #d6daf0; margin: 10px 0 10px 20px; padding: 10px; border: 1px solid #b7c5d9;">
                     <div class="post-header">
                         <span class="name">Anonymous</span>
                         <span class="date">{{.CreatedAt.Format "01/02/06(Mon)15:04:05"}}</span>
                         <span class="id">No. {{.ID}}</span>
                         {{if .ImageURL}}
-                            <span class="file-info"><br>File: <a href="{{.ImageURL}}" target="_blank">View</a></span>
+                        <span class="file-info"><br>File: <a href="{{.ImageURL}}" target="_blank">View</a></span>
                         {{end}}
                     </div>
 
                     <div class="post-content">
-                         {{if .ImageURL}}
-                            <a href="{{.ImageURL}}" target="_blank">
-                                <img src="{{.ImageURL}}" style="float: left; max-width: 125px; margin-right: 10px;">
-                            </a>
+                        {{if .ImageURL}}
+                        <a href="{{.ImageURL}}" target="_blank">
+                            <img src="{{.ImageURL}}" style="float: left; max-width: 125px; margin-right: 10px;">
+                        </a>
                         {{end}}
-                        <blockquote class="post-message" style="margin: 10px 0;">{{.Comment}}</blockquote>
+                        <blockquote class="post-message" style="margin: 10px 0;">{{.Comment | formatComment}}
+                        </blockquote>
                     </div>
                     <div style="clear: both;"></div>
                 </div>
@@ -73,4 +77,5 @@
         {{end}}
     </main>
 </body>
+
 </html>

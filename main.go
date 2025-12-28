@@ -4,9 +4,11 @@ package main
 import (
 	"crypto/subtle"
 	"fmt"
+	"html"
 	"html/template"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -15,6 +17,34 @@ var boards = []Board{
 	{Tag: "v", Name: "Video Games"},
 	{Tag: "g", Name: "Technology"},
 	{Tag: "tv", Name: "Television & Film"},
+}
+
+// formatComment processes the comment for greentext and reply links
+func formatComment(comment string) template.HTML {
+	// Escape the comment for safety
+	escaped := html.EscapeString(comment)
+
+	// Greentext: lines starting with > but NOT >>
+	lines := strings.Split(escaped, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "&gt;") && !strings.HasPrefix(line, "&gt;&gt;") {
+			lines[i] = fmt.Sprintf("<span class=\"greentext\">%s</span>", line)
+		}
+	}
+	escaped = strings.Join(lines, "\n")
+
+	// Reply links: >>ID
+	re := regexp.MustCompile(`&gt;&gt;(\d+)`)
+	escaped = re.ReplaceAllString(escaped, `<a class="reply-link" href="#p$1">&gt;&gt;$1</a>`)
+
+	// Convert newlines to <br>
+	escaped = strings.ReplaceAll(escaped, "\n", "<br>")
+
+	return template.HTML(escaped)
+}
+
+var funcMap = template.FuncMap{
+	"formatComment": formatComment,
 }
 
 // 2. Define our handler for the homepage
@@ -37,7 +67,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		Boards: boards,
 	}
 
-	tmpl, err := template.ParseFiles("templates/index.html")
+	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFiles("templates/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -118,7 +148,7 @@ func boardHandler(w http.ResponseWriter, r *http.Request) {
 			Threads:   threads, // Pass the actual threads
 		}
 
-		tmpl, err := template.ParseFiles("templates/board.html")
+		tmpl, err := template.New("board.html").Funcs(funcMap).ParseFiles("templates/board.html")
 		if err != nil {
 			http.Error(w, "Failed to load template", http.StatusInternalServerError)
 			log.Println("Template error:", err)
@@ -215,7 +245,7 @@ func handleThreadRoute(w http.ResponseWriter, r *http.Request, boardTag, threadI
 		Threads: []Thread{thread},
 	}
 
-	tmpl, err := template.ParseFiles("templates/thread.html")
+	tmpl, err := template.New("thread.html").Funcs(funcMap).ParseFiles("templates/thread.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

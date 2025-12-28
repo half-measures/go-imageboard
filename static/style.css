@@ -61,3 +61,17 @@ h2 {
     box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     transform: translateY(-2px);
 }
+
+/* Post Formatting */
+.greentext {
+    color: #789922;
+}
+
+.reply-link {
+    color: #dd0000;
+    text-decoration: none;
+}
+
+.reply-link:hover {
+    text-decoration: underline;
+}
